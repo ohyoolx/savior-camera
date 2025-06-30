@@ -33,6 +33,20 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "允许应用访问您的相机以拍照。"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "允许应用保存照片到您的相册。",
+          "savePhotosPermission": "允许应用保存照片到您的相册。",
+          "isAccessMediaLocationEnabled": true
+        }
       ]
     ],
     "experiments": {

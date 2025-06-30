@@ -1,110 +1,179 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { Collapsible } from '@/components/Collapsible';
-import { ExternalLink } from '@/components/ExternalLink';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
+import * as MediaLibrary from 'expo-media-library';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
 
-export default function TabTwoScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
+const { width } = Dimensions.get('window');
+const imageSize = (width - 30) / 3; // 3列网格布局
+
+export default function ExploreScreen() {
+  const [photos, setPhotos] = useState<MediaLibrary.Asset[]>([]);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [mediaLibraryPermission, requestMediaLibraryPermission] = MediaLibrary.usePermissions();
+
+  useEffect(() => {
+    getPhotos();
+  }, []);
+
+  const getPhotos = async () => {
+    try {
+      // 检查权限
+      if (!mediaLibraryPermission?.granted) {
+        const permission = await requestMediaLibraryPermission();
+        if (!permission.granted) {
+          setHasPermission(false);
+          return;
+        }
+      }
+      
+      setHasPermission(true);
+      
+      // 获取相册中的照片
+      const { assets } = await MediaLibrary.getAssetsAsync({
+        mediaType: 'photo',
+        sortBy: 'creationTime',
+        first: 100,
+      });
+      
+      setPhotos(assets);
+    } catch (error) {
+      console.error('获取照片失败:', error);
+      Alert.alert('错误', '无法加载照片');
+    }
+  };
+
+  const renderPhoto = ({ item }: { item: MediaLibrary.Asset }) => (
+    <TouchableOpacity style={styles.photoContainer}>
+      <Image
+        source={{ uri: item.uri }}
+        style={styles.photo}
+        contentFit="cover"
+      />
+    </TouchableOpacity>
+  );
+
+  if (hasPermission === false) {
+    return (
+      <ThemedView style={styles.permissionContainer}>
+        <ThemedText style={styles.permissionText}>
+          需要相册访问权限才能查看照片
+        </ThemedText>
+        <TouchableOpacity style={styles.permissionButton} onPress={getPhotos}>
+          <Text style={styles.permissionButtonText}>授权访问</Text>
+        </TouchableOpacity>
       </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.container}>
+      <ThemedView style={styles.header}>
+        <ThemedText type="title">我的相册</ThemedText>
+        <ThemedText style={styles.photoCount}>
+          共 {photos.length} 张照片
         </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
+      </ThemedView>
+      
+      {photos.length === 0 ? (
+        <ThemedView style={styles.emptyContainer}>
+          <ThemedText style={styles.emptyText}>暂无照片</ThemedText>
+          <ThemedText style={styles.emptySubText}>
+            去相机页面拍一些照片吧！
           </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+        </ThemedView>
+      ) : (
+        <FlatList
+          data={photos}
+          renderItem={renderPhoto}
+          keyExtractor={(item) => item.id}
+          numColumns={3}
+          contentContainerStyle={styles.photoList}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+      
+      <TouchableOpacity style={styles.refreshButton} onPress={getPhotos}>
+        <Text style={styles.refreshButtonText}>刷新</Text>
+      </TouchableOpacity>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    paddingTop: 60,
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  photoCount: {
+    fontSize: 14,
+    opacity: 0.7,
+    marginTop: 5,
+  },
+  photoList: {
+    paddingHorizontal: 10,
+  },
+  photoContainer: {
+    margin: 5,
+  },
+  photo: {
+    width: imageSize,
+    height: imageSize,
+    borderRadius: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    marginBottom: 10,
+  },
+  emptySubText: {
+    fontSize: 14,
+    opacity: 0.7,
+    textAlign: 'center',
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  permissionText: {
+    fontSize: 18,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  permissionButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 10,
+  },
+  permissionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  refreshButton: {
+    backgroundColor: '#007AFF',
+    marginHorizontal: 20,
+    marginBottom: 30,
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  refreshButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
