@@ -31,6 +31,7 @@ export default function TabLayout() {
         options={{
           title: '相机',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="camera.fill" color={color} />,
+          tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen

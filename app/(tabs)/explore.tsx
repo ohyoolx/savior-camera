@@ -4,6 +4,8 @@ import { Image } from 'expo-image';
 import * as MediaLibrary from 'expo-media-library';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 const imageSize = (width - 30) / 3; // 3列网格布局
@@ -12,10 +14,16 @@ export default function ExploreScreen() {
   const [photos, setPhotos] = useState<MediaLibrary.Asset[]>([]);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [mediaLibraryPermission, requestMediaLibraryPermission] = MediaLibrary.usePermissions();
+  const router = useRouter();
 
   useEffect(() => {
     getPhotos();
   }, []);
+
+  // 跳转到相机页面
+  function goToCamera() {
+    router.push('/');
+  }
 
   const getPhotos = async () => {
     try {
@@ -70,7 +78,12 @@ export default function ExploreScreen() {
   return (
     <ThemedView style={styles.container}>
       <ThemedView style={styles.header}>
-        <ThemedText type="title">我的相册</ThemedText>
+        <View style={styles.headerTop}>
+          <ThemedText type="title">我的相册</ThemedText>
+          <TouchableOpacity style={styles.cameraButton} onPress={goToCamera}>
+            <IconSymbol name="camera.fill" size={24} color="#007AFF" />
+          </TouchableOpacity>
+        </View>
         <ThemedText style={styles.photoCount}>
           共 {photos.length} 张照片
         </ThemedText>
@@ -80,8 +93,12 @@ export default function ExploreScreen() {
         <ThemedView style={styles.emptyContainer}>
           <ThemedText style={styles.emptyText}>暂无照片</ThemedText>
           <ThemedText style={styles.emptySubText}>
-            去相机页面拍一些照片吧！
+            点击右上角相机图标去拍一些照片吧！
           </ThemedText>
+          <TouchableOpacity style={styles.goToCameraButton} onPress={goToCamera}>
+            <IconSymbol name="camera.fill" size={20} color="white" />
+            <Text style={styles.goToCameraText}>打开相机</Text>
+          </TouchableOpacity>
         </ThemedView>
       ) : (
         <FlatList
@@ -110,10 +127,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  cameraButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   photoCount: {
     fontSize: 14,
     opacity: 0.7,
-    marginTop: 5,
   },
   photoList: {
     paddingHorizontal: 10,
@@ -140,6 +170,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.7,
     textAlign: 'center',
+    marginBottom: 20,
+  },
+  goToCameraButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    gap: 8,
+  },
+  goToCameraText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   permissionContainer: {
     flex: 1,

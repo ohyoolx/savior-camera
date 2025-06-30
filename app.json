@@ -47,6 +47,13 @@
           "savePhotosPermission": "允许应用保存照片到您的相册。",
           "isAccessMediaLocationEnabled": true
         }
+      ],
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "允许应用访问您的相机以进行人脸识别和拍照。",
+          "enableMicrophonePermission": false
+        }
       ]
     ],
     "experiments": {

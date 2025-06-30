@@ -1,35 +1,121 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Dimensions } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import * as MediaLibrary from 'expo-media-library';
-import { IconSymbol } from '@/components/ui/IconSymbol';
 import { useRouter } from 'expo-router';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import * as MediaLibrary from 'expo-media-library';
+import { 
+  Camera,
+  useCameraDevice,
+  useCameraPermission,
+  useFrameProcessor 
+} from 'react-native-vision-camera';
+import { 
+  Face,
+  useFaceDetector,
+  FaceDetectionOptions
+} from 'react-native-vision-camera-face-detector';
+import { Worklets } from 'react-native-worklets-core';
 
 const { width, height } = Dimensions.get('window');
 
 // 辅助线类型
 type GridType = 'none' | 'rule-of-thirds' | 'golden-ratio';
 
-export default function CameraComponent() {
-  const [facing, setFacing] = useState<CameraType>('back');
-  const [gridType, setGridType] = useState<GridType>('none'); // 辅助线类型
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+export default function FaceDetectionCamera() {
+  const [facing, setFacing] = useState<'front' | 'back'>('back');
+  const [gridType, setGridType] = useState<GridType>('none');
+  const [detectedFaces, setDetectedFaces] = useState<Face[]>([]);
+  const [activeFaceGrid, setActiveFaceGrid] = useState<number | null>(null);
   const [mediaLibraryPermission, requestMediaLibraryPermission] = MediaLibrary.usePermissions();
-  const cameraRef = useRef<CameraView>(null);
+  
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const device = useCameraDevice(facing);
+  const cameraRef = useRef<Camera>(null);
   const router = useRouter();
 
-  // 检查相机权限
-  if (!cameraPermission) {
-    return <View style={styles.container}><Text>加载中...</Text></View>;
-  }
+  // 人脸检测配置
+  const faceDetectionOptions = useRef<FaceDetectionOptions>({
+    performanceMode: 'fast',
+    landmarkMode: 'none',
+    contourMode: 'none',
+    classificationMode: 'none',
+    minFaceSize: 0.1,
+    trackingEnabled: false,
+  }).current;
 
-  if (!cameraPermission.granted) {
+  const { detectFaces } = useFaceDetector(faceDetectionOptions);
+
+  // 请求权限
+  useEffect(() => {
+    (async () => {
+      if (!hasPermission) {
+        await requestPermission();
+      }
+    })();
+  }, [hasPermission, requestPermission]);
+
+  // 计算人脸在九宫格中的位置
+  const getFaceGridPosition = useCallback((face: Face): number => {
+    const { bounds } = face;
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    
+    // 计算在九宫格中的位置 (1-9)
+    const gridX = Math.floor((centerX / width) * 3);
+    const gridY = Math.floor((centerY / height) * 3);
+    
+    // 确保在有效范围内
+    const clampedX = Math.max(0, Math.min(2, gridX));
+    const clampedY = Math.max(0, Math.min(2, gridY));
+    
+    return clampedY * 3 + clampedX + 1;
+  }, []);
+
+  // 处理检测到的人脸
+  const handleDetectedFaces = Worklets.createRunOnJS((faces: Face[]) => {
+    setDetectedFaces(faces);
+    
+    if (faces.length > 0) {
+      // 找到最大的人脸（最前方的人）
+      const largestFace = faces.reduce((prev, current) => 
+        (prev.bounds.width * prev.bounds.height) > (current.bounds.width * current.bounds.height) 
+          ? prev : current
+      );
+      
+      const gridPosition = getFaceGridPosition(largestFace);
+      setActiveFaceGrid(gridPosition);
+    } else {
+      setActiveFaceGrid(null);
+    }
+  });
+
+  // 人脸检测帧处理器
+  const frameProcessor = useFrameProcessor((frame) => {
+    'worklet';
+    try {
+      const faces = detectFaces(frame);
+      handleDetectedFaces(faces);
+    } catch (error) {
+      console.error('Face detection error:', error);
+    }
+  }, [handleDetectedFaces, detectFaces]);
+
+  // 权限检查
+  if (!hasPermission) {
     return (
       <View style={styles.permissionContainer}>
-        <Text style={styles.permissionText}>需要相机权限才能拍照</Text>
-        <TouchableOpacity style={styles.permissionButton} onPress={requestCameraPermission}>
+        <Text style={styles.permissionText}>需要相机权限才能进行人脸识别</Text>
+        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
           <Text style={styles.permissionButtonText}>授权相机</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!device) {
+    return (
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionText}>找不到相机设备</Text>
       </View>
     );
   }
@@ -64,10 +150,7 @@ export default function CameraComponent() {
   async function takePicture() {
     if (cameraRef.current) {
       try {
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.8,
-          base64: false,
-        });
+        const photo = await cameraRef.current.takePhoto();
         
         if (photo) {
           // 检查媒体库权限
@@ -80,7 +163,7 @@ export default function CameraComponent() {
           }
 
           // 保存照片到相册
-          await MediaLibrary.saveToLibraryAsync(photo.uri);
+          await MediaLibrary.saveToLibraryAsync(`file://${photo.path}`);
           Alert.alert('成功', '照片已保存到相册！');
         }
       } catch (error) {
@@ -107,9 +190,8 @@ export default function CameraComponent() {
 
   // 黄金分割线组件
   const GoldenRatioGrid = () => {
-    // 黄金比例 ≈ 0.618
     const goldenRatio = 0.618;
-    const complementRatio = 1 - goldenRatio; // ≈ 0.382
+    const complementRatio = 1 - goldenRatio;
     
     return (
       <View style={styles.gridContainer}>
@@ -121,9 +203,49 @@ export default function CameraComponent() {
         <View style={[styles.gridLine, styles.horizontalLine, styles.goldenLine, { top: `${goldenRatio * 100}%` }]} />
         <View style={[styles.gridLine, styles.horizontalLine, styles.goldenLine, { top: `${complementRatio * 100}%` }]} />
         
-        {/* 黄金螺旋提示点（可选） */}
+        {/* 黄金螺旋提示点 */}
         <View style={[styles.goldenPoint, { top: `${complementRatio * 100}%`, left: `${complementRatio * 100}%` }]} />
         <View style={[styles.goldenPoint, { top: `${goldenRatio * 100}%`, left: `${goldenRatio * 100}%` }]} />
+      </View>
+    );
+  };
+
+  // 九宫格人脸指示器
+  const FaceGridIndicator = () => {
+    const gridPositions = [
+      { row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 },
+      { row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 },
+      { row: 2, col: 0 }, { row: 2, col: 1 }, { row: 2, col: 2 },
+    ];
+
+    return (
+      <View style={styles.faceGridContainer}>
+        {gridPositions.map((pos, index) => {
+          const gridNumber = index + 1;
+          const isActive = gridNumber === activeFaceGrid;
+          
+          return (
+            <View
+              key={gridNumber}
+              style={[
+                styles.gridCell,
+                {
+                  top: `${(pos.row * 100) / 3 + 10}%`,
+                  left: `${(pos.col * 100) / 3 + 10}%`,
+                  width: `${100 / 3 - 20}%`,
+                  height: `${100 / 3 - 20}%`,
+                },
+                isActive && styles.activeGridCell
+              ]}
+            >
+              {isActive && (
+                <View style={styles.faceIndicator}>
+                  <IconSymbol name="person.fill" size={24} color="#00FF00" />
+                </View>
+              )}
+            </View>
+          );
+        })}
       </View>
     );
   };
@@ -156,13 +278,19 @@ export default function CameraComponent() {
 
   return (
     <View style={styles.container}>
-      <CameraView 
-        style={styles.camera} 
-        facing={facing}
+      <Camera
+        style={styles.camera}
+        device={device}
+        isActive={true}
         ref={cameraRef}
+        frameProcessor={frameProcessor}
+        photo={true}
       >
         {/* 辅助线 */}
         <GridLines />
+        
+        {/* 人脸九宫格指示器 */}
+        <FaceGridIndicator />
         
         {/* 顶部控制栏 */}
         <View style={styles.topControls}>
@@ -187,6 +315,21 @@ export default function CameraComponent() {
           )}
         </View>
 
+        {/* 人脸检测状态指示 */}
+        <View style={styles.faceStatus}>
+          <Text style={styles.faceStatusText}>
+            {detectedFaces.length > 0 
+              ? `检测到 ${detectedFaces.length} 张人脸` 
+              : '未检测到人脸'
+            }
+          </Text>
+          {activeFaceGrid && (
+            <Text style={styles.faceGridText}>
+              主要人脸位置: 第 {activeFaceGrid} 宫格
+            </Text>
+          )}
+        </View>
+
         {/* 底部控制栏 */}
         <View style={styles.buttonContainer}>
           {/* 切换摄像头按钮 */}
@@ -204,7 +347,7 @@ export default function CameraComponent() {
             <IconSymbol name="photo.fill" size={30} color="white" />
           </TouchableOpacity>
         </View>
-      </CameraView>
+      </Camera>
     </View>
   );
 }
@@ -241,6 +384,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  
   // 辅助线相关样式
   gridContainer: {
     position: 'absolute',
@@ -255,7 +399,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.4)',
   },
   goldenLine: {
-    backgroundColor: 'rgba(255, 107, 53, 0.5)', // 橙色，突出黄金分割
+    backgroundColor: 'rgba(255, 107, 53, 0.5)',
   },
   verticalLine: {
     width: 1,
@@ -273,12 +417,66 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 107, 53, 0.8)',
     transform: [{ translateX: -3 }, { translateY: -3 }],
   },
+
+  // 人脸九宫格指示器
+  faceGridContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 2,
+  },
+  gridCell: {
+    position: 'absolute',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activeGridCell: {
+    borderColor: '#00FF00',
+    borderWidth: 3,
+    backgroundColor: 'rgba(0, 255, 0, 0.1)',
+  },
+  faceIndicator: {
+    backgroundColor: 'rgba(0, 255, 0, 0.3)',
+    borderRadius: 20,
+    padding: 8,
+  },
+
+  // 人脸检测状态
+  faceStatus: {
+    position: 'absolute',
+    top: 120,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    padding: 12,
+    zIndex: 3,
+  },
+  faceStatusText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  faceGridText: {
+    color: '#00FF00',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  
   // 顶部控制栏
   topControls: {
     position: 'absolute',
     top: 60,
     right: 20,
-    zIndex: 2,
+    zIndex: 3,
     alignItems: 'flex-end',
   },
   topButton: {
@@ -307,6 +505,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+  
   // 底部控制栏
   buttonContainer: {
     position: 'absolute',
@@ -316,7 +515,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     paddingHorizontal: 30,
-    zIndex: 2,
+    zIndex: 3,
   },
   flipButton: {
     width: 50,
