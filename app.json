@@ -8,15 +8,28 @@
     "scheme": "saviorcamera",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true
-    },
+          "ios": {
+        "supportsTablet": true,
+        "deploymentTarget": "15.5",
+        "infoPlist": {
+          "NSCameraUsageDescription": "允许应用访问您的相机以进行人脸识别和拍照。"
+        },
+        "bundleIdentifier": "com.anonymous.saviorcamera"
+      },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_MEDIA_LOCATION"
+      ],
+      "package": "com.anonymous.saviorcamera"
     },
     "web": {
       "bundler": "metro",
